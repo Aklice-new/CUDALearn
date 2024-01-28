@@ -164,7 +164,7 @@ kernel<<<gridSize, blockSize>>>(a_map);
 
 
 
-![global_memory_coalescing_simple_pattern](assert\CUDA_C++_BEST_GUIDE\global_memory_coalescing_simple_pattern.png)
+![global_memory_coalescing_simple_pattern](assert/CUDA_C++_BEST_GUIDE/global_memory_coalescing_simple_pattern.png)
 
 假设目前有个block内的线程要访问一个4-byte的数据，此时就会发生memory coalescing，在block内线程是被划分进warp中进行执行的（一般一个warp内32个threads），那么这个warp内就有32 * 4这么多的访问需要，如果不进行合并，那么要进行32次访问操作，但是是经过32byte-transaction合并后，只进行4次访问操作（如上图）。
 
@@ -172,7 +172,7 @@ kernel<<<gridSize, blockSize>>>(a_map);
 
 如果说warp内的访问的内存区域是连续的，但是并不是和32-byte对齐的话，那么就会进行5次 32byte-transaction操作。可能是访问的区域有offset，然后导致和32byte并不对齐，然后就会多取一个区域。
 
-![global_memory_coalescing_misalignment](assert\CUDA_C++_BEST_GUIDE\global_memory_coalescing_misalignment.png)
+![global_memory_coalescing_misalignment](assert/CUDA_C++_BEST_GUIDE/global_memory_coalescing_misalignment.png)
 
 #### 13.2.1.3 访问未对齐的结果
 
