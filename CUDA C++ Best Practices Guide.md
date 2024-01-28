@@ -152,6 +152,9 @@ kernel<<<gridSize, blockSize>>>(a_map);
 
 不同的内存访问延迟：Global > local > texture > constant > shared > register 
 
+### 13.2.1 针对Global Memory访问的合并优化
+
+在Global Memory上的加载和访问操作会被设备优化成为事务，关于事务具有ACID四个性质，感觉也可以用到这里。
 
 
 
