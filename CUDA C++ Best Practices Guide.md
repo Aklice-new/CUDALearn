@@ -185,31 +185,73 @@ __global__ void offsetCopy(float *odata, float* idata, int offset) {
 }
 ```
 
-当offset为0或者为8（$4 \times 8 = 32yte$）的倍数时，会发生4次32byte-transaction，当为其他的时候就会发生5次，所以理论上来说有效带宽会变为之前的80%，但是在实验中因为相邻的warp之间会保留cache，所以有效带宽变为了原来的90%，但是足以说明问题。
+当offset为0或者为8（$4 \times 8 = 32byte$）的倍数时，会发生4次32byte-transaction，当为其他的时候就会发生5次，所以理论上来说有效带宽会变为之前的80%，但是在实验中因为相邻的warp之间会保留cache，所以有效带宽变为了原来的90%，但是足以说明问题。
 
 TODO： add code example and result
 
 #### 13.2.1.4 strides access 按步访问
 
+按步幅访问内存在一些矩阵操作中经常会碰到，而这种访问方式会极大的降低有效带宽，假设步幅为2，那么按照之前的合并策略相邻的线程会公用同一个32-byte-transactions，而其中一般的数据都是无用的，所以会浪费掉。同时随着步幅的增大，这种情况会更严重，最极端的情况下会导致一个warp中的32个线程都开启一个32-byte-transaction。
 
+![strides_access](assert/CUDA_C++_BEST_GUIDE/strides_access.png)
 
+### 13.2.2 L2 Cache
 
+从CUDA 11.0开始 compute capability 8.0以上的设备支持了L2 Cache，这是一种支持高速访问的缓存。
 
+#### 13.2.2.1 L2 Cache 访问窗口
 
+在global memory的访问过程中可能会出现一些数据被频繁的访问，那么可以认为这块区域是持久访问区域(persisting access)，而其他的责备认为是流式访问，为了提高访问效率L2 Cache区域用于存储这些数据，如果说没有数据存储在L2 Cache中，则一般的流式访问的数据也可以存储在这篇区域内。
 
+```cpp
 
+```
 
+需要注意的是需要根据num_bytes和L2 缓存的大小来调整hitRatio来避免L2 Cache抖动。
 
+#### 13.2.2.2 调整访问窗口的命中率
 
+hitRatio描述的是在全局内存区域中，申请的L2 Cache这片区域内，即：[ptr + num_bytes]的 hitRatio * 100%的数据是具有持久访问的性质，剩下（1 - hitRatio）* 100%的数据仍然是流式访问。
 
+![L2_cache_1](assert\CUDA_C++_BEST_GUIDE\L2_cache_3.png)
 
+但是GPU中的L2 Cache的大小是固定的，如Tesla V100的L2 Cache是40MB，当hitRatio为1.0时，当L2的num_bytes设置的太大，就会导致L2 Cache中的数据被频繁的换入换出，也就是操作系统中的抖动（trashing），可以看到当L2 Cache大于30MB时，性能就会发生下降，如下图。
 
+![L2_cache_1](assert\CUDA_C++_BEST_GUIDE\L2_cache_1.png)
 
+但是我们可以通过调整合适的hitRatio来适当的避免trashing的情况。
 
+![L2_cache_1](assert\CUDA_C++_BEST_GUIDE\L2_cache_2.png)
 
+### 13.2.3 Shared Memory 共享内存
 
+共享内存也是GPU上的一片区域，相比于global memory，在没有线程冲突的情况下拥有更高的带宽和更低的延迟。
 
+#### 13.2.3.1 Shared Memory and Memory Bank
 
+为了提高并发访问的带宽，shared memory被分成了相同大小且可以同时访问的bank，因此，在访问shared memory中的不同bank时就可以实现并发访问，但是当访问相同的bank时就会发生bank conflict，线程就会失去并行的性质，被转换为串行的、无冲突的方式执行。但是这里有种情况时例外：当一个warp中的线程对同一片shared memory进行访问时，就会产生广播，即访问一次所有的线程都会知晓。
+
+一个warp中有32个线程，同时也有32个banks，所以说同一个warp中的线程很容易发生冲突。为了避免或者最小化bank conflict，了解kernel中时如何寻址的，这很重要。
+
+#### 13.2.3.2 Shared Memory在矩阵乘法中的应用$(C = A \times B)$
+
+简单描述一下矩阵乘法问题，假设我们有一个矩阵$A (M \times w)$,矩阵$B(w \times N)$，则$C(M \times N)$，为了简化问题，M, N 都能整除32，因为一个warp中的线程数等于32。
+
+我们用一个线程去负责$C_{i, j}$的计算，那么就需要访问$A[i, :]$ 和$B[:, j]$进行计算，下面给出代码:
+
+```cpp 
+__global__ void simpleMultiply(float* a, float* b, float* c)
+{
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    float sum = 0.0f;
+    for(int i = 0 ;i < TILE_DIM;i ++)
+    {
+		sum += a[row * TILE_DIM + i] * b[i * N + col];
+    }
+    c[row * TILE_DIM + col] = sum;
+}
+```
 
 
 
