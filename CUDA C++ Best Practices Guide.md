@@ -225,7 +225,7 @@ hitRatio描述的是在全局内存区域中，申请的L2 Cache这片区域内�
 
 ### 13.2.3 Shared Memory 共享内存
 
-共享内存也是GPU上的一片区域，相比于global memory，在没有线程冲突的情况下拥有更高的带宽和更低的延迟。
+共享内存也是GPU上的一片区域，每个block都有一片这样的区域，block中的thread可以共享这片区域。相比于global memory，在没有线程冲突的情况下拥有更高的带宽和更低的延迟。
 
 #### 13.2.3.1 Shared Memory and Memory Bank
 
@@ -235,9 +235,13 @@ hitRatio描述的是在全局内存区域中，申请的L2 Cache这片区域内�
 
 #### 13.2.3.2 Shared Memory在矩阵乘法中的应用$(C = A \times B)$
 
-简单描述一下矩阵乘法问题，假设我们有一个矩阵$A (M \times w)$,矩阵$B(w \times N)$，则$C(M \times N)$，为了简化问题，M, N 都能整除32，因为一个warp中的线程数等于32。
+简单描述一下矩阵乘法问题，假设我们有一个矩阵$A (M \times w)$,矩阵$B(w \times N)$，则$C(M \times N)$，为了简化问题，M, N 都能整除32，因为一个warp中的线程数等于32，所以一个warp中的线程计算的区域刚好就是C矩阵中的一行。
 
-我们用一个线程去负责$C_{i, j}$的计算，那么就需要访问$A[i, :]$ 和$B[:, j]$进行计算，下面给出代码:
+我们用一个线程去负责$C_{i, j}$的计算，那么就需要访问$A[i, :]$ 和$B[:, j]$进行计算，
+
+![metrics_mul_1](assert\CUDA_C++_BEST_GUIDE\metrics_mul_1.png)
+
+下面给出朴素版的代码:
 
 ```cpp 
 __global__ void simpleMultiply(float* a, float* b, float* c)
@@ -253,19 +257,107 @@ __global__ void simpleMultiply(float* a, float* b, float* c)
 }
 ```
 
+在一个warp中计算时，我们会发现每次加载的A矩阵中都是相同的一行，而朴素版本的实现中，会多次加载这片数据，由于global memory的合并访存策略，访问一个元素值$A_{i,k}$时会因为32-byte-transaction一次性读入8个数据进来，但是只有一个数据被访问，带宽就会被浪费掉。我们可以通过warp内共享内存的方式，将A的一行只从global memory中读取一次，然后后面直接从共享内存中读取即可，同时共享没存中读入数据是广播的方式。
 
 
 
+![metrics_mul_1](assert\CUDA_C++_BEST_GUIDE\metrics_mul_2.png)
+
+下面给出针对A矩阵的读取过程改进后代码：
+
+```cpp
+__global__ void simpleMultiply_1(float* a, float* b, float* c)
+{
+    __shared__ float a_shared[TILE_DIM][TILE_DIM];
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    a_shared[threadIdx.x][threadIdx.y] = a[row * TILE_DIM + threadIdx.y];
+    __syncwarp(); //使用__syncwarp()是为了使得一个warp中的线程同步完成对这片区域内存的加载，同时它比__syncthread()更为轻量级。
+   	float sum = 0.0f;
+    for(int i = 0;i < TILE_DIM;i ++)
+    {
+		sum += a_shared[threadIdx.x][i] * b[i * N + col];
+    }
+}
+```
 
 
 
+再来讨论一下针对B矩阵的优化，我们可以发现B矩阵中的每一列也都会被被多次访问，但是需要注意的是B矩阵的每一列在被重复访问的时候是发生在不同的warp中的，所以说在同步的过程中我们需要使用__syncthreads()进行线程间同步来保证数据被完全读入到共享内存中。
 
+下面是加上对B矩阵优化后的代码：
 
+```cpp
+__global__ void simpleMutiply_2(float* a, float* b, float* c)
+{
+    __shared__ float a_shared[TILE_DIM][TILE_DIM], b_shared[TILE_DIM][TILE_DIM];
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    a_shared[threadIdx.x][threadIdx.y] = a[row * TILE_DIM + threadIdx.y];
+    b_shated[threadIdx.x][threadIdx.y] = b[threadIdx.x * N + col];
+   	__syncthreads();
+    float sum = 0.0f;
+    for(int i = 0;i < TILE_DIM;i ++)
+    {
+		sum += a_shared[threadIdx.x][i] * b_shared[i][threadIdx.y];
+    }
+    c[row * N + col] = sum;
+}
+```
 
+需要注意的是这个版本的实现提高了有效带宽的原因并不是因为发生了合并访存而提升了，而是因为减少了数据的冗余传输。
 
+#### 13.2.3.3 Shared Memory在矩阵乘法中的应用$(C = A \times A^T)$
 
+为了对这种乘法进行优化，先给出朴素版本的实现：
 
+```cpp
+__global__ void simpleMutiply_3(float* a, float* c)
+{
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    float sum = 0;
+    for(int i = 0;i < TILE_DIM;i ++)
+    {
+        sum += a[row * TILE_DIM + i] * a[col * TILE_DIM + i];
+    }
+    c[row * M + col] = sum;
+}
+```
 
+为了计算$C_{i, j}$，通过计算A矩阵的第i行和第j行的点积即可。但是相比于$C = A \times B$中唯一的区别就是对第二个矩阵的访问上，访问B时通过$B[i * N + col]$，但是这里是$A[col * TILE\_DIM + i]$，就这样的区别导致整体的性能下降了巨多。为什么呢？在一个warp中col*TILE_DIM的时候进行的是strides access会浪费掉很多的带宽，所以性能会下降很多。
+
+下面就是要通过shared memory为媒介来合并访存global memory以提高带宽的使用率。下面是实现的代码：
+
+```cpp
+__global__ void simpleMutiply_4(float* a, float* c)
+{
+    __shared__ float aTile[TILE_DIM][TILE_DIM], transposedTile[TILE_DIM][TILE_DIM];
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    aTile[threadIdx.x][threadIdx.y] = a[row * TILE_DIM + threadIdx.y];
+    transposedTile[threadIdx.y][threadIdx.x] = a[(blockIdx.y * blockDim.y + threadIdx.x) * TILE_DIM + threadIdx.y];
+    __syncthread();
+    float sum = 0.0f;
+    for(int i = 0;i < TILE_DIM;i ++)
+    {
+  		sum += aTile[threadIdx.x][i] * transposedTile[i][threadIdx.x];
+    }
+    c[row * M + col] = sum;
+}
+```
+
+但是上面的代码仍存在问题，[stackoverflaow](https://stackoverflow.com/questions/76934852/why-are-they-padding-only-one-shared-memory), [nvidia-forums](https://forums.developer.nvidia.com/t/help-understanding-bank-conflicts-in-transpose-example/6695),这两个链接是关于上面这段代码，是对bank conflict如何产生的讨论。
+
+首先说明一下什么是bank conflict，在一个warp中，shared memory被分成32个bank，同时一个warp中也有32个线程，当不同线程对同一个bank进行访问时就会产生bank conflict。
+
+那么bank在shared memory中是如何划分的？可以这样简单计算第i-th个元素 % 32就是所在的bank。
+
+上面的代码中发生bank conflict的就是在transposedTile中，一个warp中线程的threadIdx.x都是相同的，threadIdx.y从0~31，所以在写入的时候会从transposed[0~31] [threadIdx.x]，按照上述的bank划分的结果，写入的这些内存区域刚好就在同一个bank内，所以会发生很严重的bank conflict。
+
+解决这个问题的方法很简单，只需要将transposedTile的形状改变，transposedTile[TILE_DIM] [TILE_DIM + 1]，这样重新计算一下bank的划分，就不会产生conflict。
+
+#### 13.2.3.4 异步的从Global Memory中将数据复制到Shared Memory
 
 
 
