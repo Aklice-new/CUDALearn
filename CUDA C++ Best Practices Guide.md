@@ -213,15 +213,15 @@ TODO： add code example and result
 
 hitRatio描述的是在全局内存区域中，申请的L2 Cache这片区域内，即：[ptr + num_bytes]的 hitRatio * 100%的数据是具有持久访问的性质，剩下（1 - hitRatio）* 100%的数据仍然是流式访问。
 
-![L2_cache_1](assert\CUDA_C++_BEST_GUIDE\L2_cache_3.png)
+![L2_cache_1](assert/CUDA_C++_BEST_GUIDE/L2_cache_3.png)
 
 但是GPU中的L2 Cache的大小是固定的，如Tesla V100的L2 Cache是40MB，当hitRatio为1.0时，当L2的num_bytes设置的太大，就会导致L2 Cache中的数据被频繁的换入换出，也就是操作系统中的抖动（trashing），可以看到当L2 Cache大于30MB时，性能就会发生下降，如下图。
 
-![L2_cache_1](assert\CUDA_C++_BEST_GUIDE\L2_cache_1.png)
+![L2_cache_1](assert/CUDA_C++_BEST_GUIDE/L2_cache_1.png)
 
 但是我们可以通过调整合适的hitRatio来适当的避免trashing的情况。
 
-![L2_cache_1](assert\CUDA_C++_BEST_GUIDE\L2_cache_2.png)
+![L2_cache_1](assert/CUDA_C++_BEST_GUIDE/L2_cache_2.png)
 
 ### 13.2.3 Shared Memory 共享内存
 
@@ -239,7 +239,7 @@ hitRatio描述的是在全局内存区域中，申请的L2 Cache这片区域内�
 
 我们用一个线程去负责$C_{i, j}$的计算，那么就需要访问$A[i, :]$ 和$B[:, j]$进行计算，
 
-![metrics_mul_1](assert\CUDA_C++_BEST_GUIDE\metrics_mul_1.png)
+![metrics_mul_1](assert/CUDA_C++_BEST_GUIDE/metrics_mul_1.png)
 
 下面给出朴素版的代码:
 
@@ -261,7 +261,7 @@ __global__ void simpleMultiply(float* a, float* b, float* c)
 
 
 
-![metrics_mul_1](assert\CUDA_C++_BEST_GUIDE\metrics_mul_2.png)
+![metrics_mul_1](assert/CUDA_C++_BEST_GUIDE/metrics_mul_2.png)
 
 下面给出针对A矩阵的读取过程改进后代码：
 
