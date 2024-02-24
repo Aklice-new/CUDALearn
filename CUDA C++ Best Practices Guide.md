@@ -154,7 +154,7 @@ kernel<<<gridSize, blockSize>>>(a_map);
 
 ### 13.2.1 针对Global Memory访问的合并优化
 
-在Global Memory上的加载和访问操作会被设备优化成为事务，简单来说就是可以将一个block中的一个warp内的操作进行合并，成为一个请求，然后进行内存的访问，从而优化带宽。
+在Global Memory上的加载和访问操作会被设备优化成为事务，简单来说就是可以将一个block中的一个warp内的一些连续的多个访存操作进行合并，成为一个请求，然后进行内存的访问，从而优化带宽。
 
 这里有一个关于Memory Coalescing的讨论[stackoverflow连接](https://stackoverflow.com/questions/5041328/in-cuda-what-is-memory-coalescing-and-how-is-it-achieved)
 
