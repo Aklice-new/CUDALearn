@@ -351,7 +351,9 @@ __global__ void simpleMutiply_4(float* a, float* c)
 
 首先说明一下什么是bank conflict，在一个warp中，shared memory被分成32个bank，同时一个warp中也有32个线程，当不同线程对同一个bank进行访问时就会产生bank conflict。
 
-那么bank在shared memory中是如何划分的？可以这样简单计算第i-th个元素 % 32就是所在的bank。
+那么bank在shared memory中是如何划分的？
+可能不同的架构有不同的设定，假设每次是以32-bit划分一个bank，则刚好一个bank内就是一个float类型的数据，
+则计算第i-th个元素 % 32就是所在的bank。
 
 上面的代码中发生bank conflict的就是在transposedTile中，一个warp中线程的threadIdx.x都是相同的，threadIdx.y从0~31，所以在写入的时候会从transposed[0~31] [threadIdx.x]，按照上述的bank划分的结果，写入的这些内存区域刚好就在同一个bank内，所以会发生很严重的bank conflict。
 
