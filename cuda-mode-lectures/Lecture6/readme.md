@@ -13,18 +13,18 @@
 上图中所示的是Adamw的实现细节,其数学公式可以表达为：
 
 $$
-m_t = beta1 * m_{t - 1} + (1 - beta1) * grad \\
-
-
-v_t = beta2 * v_{t - 1} + (1 - beta2) * grad^2 \\
-
-
-\hat{v_t} = \frac{v_t}{1 - beta2^step} \\
-
-
-\hat{m_t} = \frac{m_t}{1 - beta1^step} \\
-
-
+m_t = beta1 * m_{t - 1} + (1 - beta1) * grad 
+$$
+$$
+v_t = beta2 * v_{t - 1} + (1 - beta2) * grad^2
+$$
+$$
+\hat{v_t} = \frac{v_t}{1 - beta2^step} 
+$$
+$$
+\hat{m_t} = \frac{m_t}{1 - beta1^step} 
+$$
+$$
 param = param - lr \times \frac{\hat{m_{t - 1}}}{\sqrt(\hat{v_{t - 1}} + eps)}
 $$
 
