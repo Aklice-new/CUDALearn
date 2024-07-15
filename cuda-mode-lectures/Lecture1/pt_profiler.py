@@ -1,7 +1,5 @@
 import torch
 
-
-
 def time_pytorch_function(func, input):
     start = torch.cuda.Event(enable_timing=True)
     end   = torch.cuda.Event(enable_timing=True)
@@ -58,5 +56,3 @@ print("=============")
 with torch.autograd.profiler.profile(use_cuda=True) as prof:
     square_2(b)
 print(prof.key_averages().table(sort_by='cuda_time_total', row_limit=10))
-
-

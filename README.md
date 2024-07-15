@@ -1,5 +1,11 @@
 # CUDALearn
-该仓库中的内容是个人的CUDA学习笔记，[《CUDA C++ Best Practices Guide》V12.3](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html)
+该仓库中的内容是个人的CUDA学习笔记。
+
+
+
+
+## CUDA C++ Best Practices Guide
+[《CUDA C++ Best Practices Guide》V12.3](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html)
 
 包含了 ：
 - 第12章 性能度量
@@ -12,3 +18,14 @@
 
 ---
 TODO: update some code
+
+## CUDA Best Programming Guide
+
+
+## Programming Massively Parallel Processors
+
+
+### cuda-mode-lectures
+记录了一下学习这个视频过程中的一些知识，已经做所得实验。
+
+### lecture1 
