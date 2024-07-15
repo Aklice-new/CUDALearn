@@ -11,6 +11,7 @@
 上图是optimizer的一般过程，输入是待优化的参数params，和参数对应的梯度gradients。
 然后根据学习率lr去对参数进行更新(不同的优化器的实现细节不同)。
 上图中所示的是Adamw的实现细节,其数学公式可以表达为：
+
 $$
 m_t = beta1 * m_{t - 1} + (1 - beta1) * grad \\
 v_t = beta2 * v_{t - 1} + (1 - beta2) * grad^2 \\
@@ -18,6 +19,7 @@ v_t = beta2 * v_{t - 1} + (1 - beta2) * grad^2 \\
 \hat{m_t} = \frac{m_t}{1 - beta1^step} \\
 param = param - lr \times \frac{\hat{m_{t - 1}}}{\sqrt(\hat{v_{t - 1}} + eps)}
 $$
+
 (其中m为一节动量，v为二阶动量)。
 
 整个计算的过程如左下图所示，需要依次执行每个for循环，然后按照步骤执行其中的每个过程。如果对这个程序通过cuda来并行加速，这里考虑的是对计算的水平融合(Horizontally Fuse)。
